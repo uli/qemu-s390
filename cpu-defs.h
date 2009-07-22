@@ -148,6 +148,13 @@ typedef struct CPUWatchpoint {
 } CPUWatchpoint;
 
 #define CPU_TEMP_BUF_NLONGS 128
+
+#ifdef CONFIG_USER_ONLY
+#define MULTITHREAD uint32_t multithreaded;
+#else
+#define MULTITHREAD
+#endif
+
 #define CPU_COMMON                                                      \
     struct TranslationBlock *current_tb; /* currently executing TB  */  \
     /* soft mmu support */                                              \
@@ -160,6 +167,7 @@ typedef struct CPUWatchpoint {
                                      memory was accessed */             \
     uint32_t halted; /* Nonzero if the CPU is in suspend state */       \
     uint32_t interrupt_request;                                         \
+    MULTITHREAD /* needs locking when accessing TBs */                  \
     volatile sig_atomic_t exit_request;                                 \
     CPU_COMMON_TLB                                                      \
     struct TranslationBlock *tb_jmp_cache[TB_JMP_CACHE_SIZE];           \

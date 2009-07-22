@@ -223,6 +223,9 @@ int cpu_exec(CPUState *env1)
     TranslationBlock *tb;
     uint8_t *tc_ptr;
     unsigned long next_tb;
+#ifdef CONFIG_USER_ONLY
+    uint32_t multithreaded;
+#endif
 
     if (cpu_halted(env1) == EXCP_HALTED)
         return EXCP_HALTED;
@@ -571,7 +574,11 @@ int cpu_exec(CPUState *env1)
 #endif
                 }
 #endif /* DEBUG_DISAS || CONFIG_DEBUG_EXEC */
-                spin_lock(&tb_lock);
+#ifdef CONFIG_USER_ONLY
+                multithreaded = env->multithreaded;
+                if (multithreaded)
+#endif
+                    spin_lock(&tb_lock);
                 tb = tb_find_fast();
                 /* Note: we do it here to avoid a gcc bug on Mac OS X when
                    doing it in tb_find_slow */
@@ -593,7 +600,10 @@ int cpu_exec(CPUState *env1)
                 if (next_tb != 0 && tb->page_addr[1] == -1) {
                     tb_add_jump((TranslationBlock *)(next_tb & ~3), next_tb & 3, tb);
                 }
-                spin_unlock(&tb_lock);
+#ifdef CONFIG_USER_ONLY
+                if (multithreaded)
+#endif
+                    spin_unlock(&tb_lock);
 
                 /* cpu_interrupt might be called while translating the
                    TB, but before it is linked into a potentially

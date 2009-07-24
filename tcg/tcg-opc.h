@@ -41,6 +41,7 @@ DEF(call, 0, 1, 2, TCG_OPF_SIDE_EFFECTS) /* variable number of parameters */
 DEF(jmp, 0, 1, 0, TCG_OPF_BB_END | TCG_OPF_SIDE_EFFECTS)
 DEF(br, 0, 0, 1, TCG_OPF_BB_END | TCG_OPF_SIDE_EFFECTS)
 
+DEF(sync_i32, 0, 1, 0, 0)
 DEF(mov_i32, 1, 1, 0, 0)
 DEF(movi_i32, 1, 0, 1, 0)
 DEF(setcond_i32, 1, 2, 1, 0)
@@ -128,6 +129,7 @@ DEF(nor_i32, 1, 2, 0, 0)
 #endif
 
 #if TCG_TARGET_REG_BITS == 64
+DEF(sync_i64, 0, 1, 0, 0)
 DEF(mov_i64, 1, 1, 0, 0)
 DEF(movi_i64, 1, 0, 1, 0)
 DEF(setcond_i64, 1, 2, 1, 0)

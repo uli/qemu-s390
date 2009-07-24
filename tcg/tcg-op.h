@@ -342,6 +342,18 @@ static inline void tcg_gen_br(int label)
     tcg_gen_op1i(INDEX_op_br, label);
 }
 
+static inline void tcg_gen_sync_i32(TCGv_i32 arg)
+{
+    tcg_gen_op1_i32(INDEX_op_sync_i32, arg);
+}
+
+#if TCG_TARGET_REG_BITS == 64
+static inline void tcg_gen_sync_i64(TCGv_i64 arg)
+{
+    tcg_gen_op1_i64(INDEX_op_sync_i64, arg);
+}
+#endif
+
 static inline void tcg_gen_mov_i32(TCGv_i32 ret, TCGv_i32 arg)
 {
     if (!TCGV_EQUAL_I32(ret, arg))

@@ -2022,6 +2022,12 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
         //        dump_regs(s);
 #endif
         switch(opc) {
+        case INDEX_op_sync_i32:
+#if TCG_TARGET_REG_BITS == 64
+        case INDEX_op_sync_i64:
+#endif
+            temp_save(s, args[0], s->reserved_regs);
+            break;
         case INDEX_op_mov_i32:
 #if TCG_TARGET_REG_BITS == 64
         case INDEX_op_mov_i64:

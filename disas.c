@@ -210,6 +210,9 @@ void target_disas(FILE *out, target_ulong code, target_ulong size, int flags)
 #elif defined(TARGET_CRIS)
     disasm_info.mach = bfd_mach_cris_v32;
     print_insn = print_insn_crisv32;
+#elif defined(TARGET_S390X)
+    disasm_info.mach = bfd_mach_s390_64;
+    print_insn = print_insn_s390;
 #elif defined(TARGET_MICROBLAZE)
     disasm_info.mach = bfd_arch_microblaze;
     print_insn = print_insn_microblaze;

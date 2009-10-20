@@ -974,6 +974,7 @@ sh4eb-linux-user \
 sparc-linux-user \
 sparc64-linux-user \
 sparc32plus-linux-user \
+s390x-linux-user \
 "
     fi
 # the following are Darwin specific

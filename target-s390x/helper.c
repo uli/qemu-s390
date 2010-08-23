@@ -26,8 +26,10 @@
 #include "gdbstub.h"
 #include "qemu-common.h"
 
+#if !defined(CONFIG_USER_ONLY)
 #include <linux/kvm.h>
 #include "kvm.h"
+#endif
 
 CPUS390XState *cpu_s390x_init(const char *cpu_model)
 {
@@ -38,6 +40,7 @@ CPUS390XState *cpu_s390x_init(const char *cpu_model)
     cpu_exec_init(env);
     if (!inited) {
         inited = 1;
+        s390x_translate_init();
     }
 
     env->cpu_model_str = cpu_model;
@@ -45,6 +48,24 @@ CPUS390XState *cpu_s390x_init(const char *cpu_model)
     qemu_init_vcpu(env);
     return env;
 }
+
+#if defined(CONFIG_USER_ONLY)
+
+void do_interrupt (CPUState *env)
+{
+    env->exception_index = -1;
+}
+
+int cpu_s390x_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
+                              int mmu_idx, int is_softmmu)
+{
+    /* fprintf(stderr,"%s: address 0x%lx rw %d mmu_idx %d is_softmmu %d\n", __FUNCTION__, address, rw, mmu_idx, is_softmmu); */
+    env->exception_index = EXCP_ADDR;
+    env->__excp_addr = address; /* FIXME: find out how this works on a real machine */
+    return 1;
+}
+
+#endif /* CONFIG_USER_ONLY */
 
 void cpu_reset(CPUS390XState *env)
 {
@@ -58,12 +79,12 @@ void cpu_reset(CPUS390XState *env)
     tlb_flush(env, 1);
 }
 
+#ifndef CONFIG_USER_ONLY
+
 target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 {
     return 0;
 }
-
-#ifndef CONFIG_USER_ONLY
 
 int cpu_s390x_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
                                 int mmu_idx, int is_softmmu)

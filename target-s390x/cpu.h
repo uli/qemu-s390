@@ -26,6 +26,14 @@
 #define CPUState struct CPUS390XState
 
 #include "cpu-defs.h"
+#define TARGET_PAGE_BITS 12
+
+/* ??? This is certainly wrong for 64-bit s390x, but given that only KVM
+   emulation actually works, this is good enough for a placeholder.  */
+#define TARGET_PHYS_ADDR_SPACE_BITS 64
+#define TARGET_VIRT_ADDR_SPACE_BITS 64
+
+#include "cpu-all.h"
 
 #include "softfloat.h"
 
@@ -51,7 +59,7 @@ typedef struct CPUS390XState {
     uint32_t aregs[16];	/* access registers */
 
     uint32_t fpc;	/* floating-point control register */
-    FPReg fregs[16]; /* FP registers */
+    CPU_DoubleU fregs[16]; /* FP registers */
     float_status fpu_status; /* passed to softfloat lib */
 
     struct {
@@ -85,8 +93,10 @@ static inline int cpu_mmu_index (CPUState *env)
 }
 
 CPUS390XState *cpu_s390x_init(const char *cpu_model);
+void s390x_translate_init(void);
 int cpu_s390x_exec(CPUS390XState *s);
 void cpu_s390x_close(CPUS390XState *s);
+void do_interrupt (CPUState *env);
 
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
@@ -97,29 +107,32 @@ int cpu_s390x_handle_mmu_fault (CPUS390XState *env, target_ulong address, int rw
                               int mmu_idx, int is_softmuu);
 #define cpu_handle_mmu_fault cpu_s390x_handle_mmu_fault
 
-#define TARGET_PAGE_BITS 12
-
-/* ??? This is certainly wrong for 64-bit s390x, but given that only KVM
-   emulation actually works, this is good enough for a placeholder.  */
-#define TARGET_PHYS_ADDR_SPACE_BITS 32
-#define TARGET_VIRT_ADDR_SPACE_BITS 32
 
 #ifndef CONFIG_USER_ONLY
 extern int s390_virtio_hypercall(CPUState *env);
 extern void kvm_s390_virtio_irq(CPUState *env, int config_change, uint64_t token);
 extern CPUState *s390_cpu_addr2state(uint16_t cpu_addr);
 #endif
+void cpu_lock(void);
+void cpu_unlock(void);
 
+static inline void cpu_set_tls(CPUS390XState *env, target_ulong newtls)
+{
+    env->aregs[0] = newtls >> 32;
+    env->aregs[1] = newtls & 0xffffffffULL;
+}
 
 #define cpu_init cpu_s390x_init
 #define cpu_exec cpu_s390x_exec
 #define cpu_gen_code cpu_s390x_gen_code
+#define cpu_signal_handler cpu_s390x_signal_handler
 
-#include "cpu-all.h"
+#include "exec-all.h"
 
 #define EXCP_OPEX 1 /* operation exception (sigill) */
 #define EXCP_SVC 2 /* supervisor call (syscall) */
 #define EXCP_ADDR 5 /* addressing exception */
+#define EXCP_SPEC 6 /* specification exception */
 #define EXCP_EXECUTE_SVC 0xff00000 /* supervisor call via execute insn */
 
 static inline void cpu_get_tb_cpu_state(CPUState* env, target_ulong *pc,

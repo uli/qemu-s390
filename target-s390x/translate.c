@@ -48,6 +48,7 @@ struct DisasContext {
     uint64_t pc;
     int is_jmp;
     CPUS390XState *env;
+    struct TranslationBlock *tb;
 };
 
 #define DISAS_EXCP 4
@@ -346,23 +347,55 @@ static void gen_bcr(uint32_t mask, int tr, uint64_t offset)
     tcg_temp_free(target);
 }
 
-static void gen_brc(uint32_t mask, uint64_t pc, int32_t offset)
+static inline void gen_goto_tb(DisasContext *s, int tb_num, target_ulong pc)
 {
-    TCGv p;
-    TCGv_i32 m, o;
+    TranslationBlock *tb;
+
+    tb = s->tb;
+    /* NOTE: we handle the case where the TB spans two pages here */
+    if ((pc & TARGET_PAGE_MASK) == (tb->pc & TARGET_PAGE_MASK) ||
+        (pc & TARGET_PAGE_MASK) == ((s->pc - 1) & TARGET_PAGE_MASK))  {
+        /* jump to same page: we can use a direct jump */
+        tcg_gen_mov_i32(global_cc, cc);
+        tcg_gen_goto_tb(tb_num);
+        tcg_gen_movi_i64(psw_addr, pc);
+        tcg_gen_exit_tb((long)tb + tb_num);
+    } else {
+        /* jump to another page: currently not optimized */
+        tcg_gen_movi_i64(psw_addr, pc);
+        tcg_gen_mov_i32(global_cc, cc);
+        tcg_gen_exit_tb(0);
+    }
+}
+
+static void gen_brc(uint32_t mask, DisasContext *s, int32_t offset)
+{
+    TCGv_i32 r;
+    TCGv_i32 tmp, tmp2;
+    int skip;
     
     if (mask == 0xf) {	/* unconditional */
-      tcg_gen_movi_i64(psw_addr, pc + offset);
+      //tcg_gen_movi_i64(psw_addr, s->pc + offset);
+      gen_goto_tb(s, 0, s->pc + offset);
     }
     else {
-      m = tcg_const_i32(mask);
-      p = tcg_const_i64(pc);
-      o = tcg_const_i32(offset);
-      gen_helper_brc(cc, m, p, o);
-      tcg_temp_free(m);
-      tcg_temp_free(p);
-      tcg_temp_free(o);
+      tmp = tcg_const_i32(3);
+      tcg_gen_sub_i32(tmp, tmp, cc);	/* 3 - cc */
+      tmp2 = tcg_const_i32(1);
+      tcg_gen_shl_i32(tmp2, tmp2, tmp);	/* 1 << (3 - cc) */
+      r = tcg_const_i32(mask);
+      tcg_gen_and_i32(r, r, tmp2);	/* mask & (1 << (3 - cc)) */
+      tcg_temp_free(tmp);
+      tcg_temp_free(tmp2);
+      skip = gen_new_label();
+      tcg_gen_brcondi_i32(TCG_COND_EQ, r, 0, skip);
+      gen_goto_tb(s, 0, s->pc + offset);
+      gen_set_label(skip);
+      gen_goto_tb(s, 1, s->pc + 4);
+      //tcg_gen_mov_i32(global_cc, cc);
+      tcg_temp_free(r);
     }
+    s->is_jmp = DISAS_TB_JUMP;
 }
 
 static void gen_set_cc_add64(TCGv v1, TCGv v2, TCGv vr)
@@ -1130,9 +1163,7 @@ static void disas_a7(DisasContext *s, int op, int r1, int i2)
         tcg_temp_free(tmp2);
         break;
     case 0x4: /* brc m1, i2 */
-        /* FIXME: optimize m1 == 0xf (unconditional) case */
-        gen_brc(r1, s->pc, i2 * 2);
-        s->is_jmp = DISAS_JUMP;
+        gen_brc(r1, s, i2 * 2);
         return;
     case 0x5: /* BRAS     R1,I2     [RI] */
         tmp = tcg_const_i64(s->pc + 4);
@@ -2726,6 +2757,7 @@ static inline void gen_intermediate_code_internal (CPUState *env,
     dc.env = env;
     dc.pc = pc_start;
     dc.is_jmp = DISAS_NEXT;
+    dc.tb = tb;
     
     gen_opc_end = gen_opc_buf + OPC_MAX_SIZE;
     
@@ -2765,8 +2797,11 @@ static inline void gen_intermediate_code_internal (CPUState *env,
         num_insns++;
     } while (!dc.is_jmp && gen_opc_ptr < gen_opc_end && dc.pc < next_page_start
              && num_insns < max_insns && !env->singlestep_enabled);
-    tcg_gen_mov_i32(global_cc, cc);
-    tcg_temp_free(cc);
+
+    if (dc.is_jmp != DISAS_TB_JUMP) {
+        tcg_gen_mov_i32(global_cc, cc);
+        tcg_temp_free(cc);
+    }
     
     if (!dc.is_jmp) {
         tcg_gen_st_i64(tcg_const_i64(dc.pc), cpu_env, offsetof(CPUState, psw.addr));
@@ -2781,7 +2816,9 @@ static inline void gen_intermediate_code_internal (CPUState *env,
     if (tb->cflags & CF_LAST_IO)
         gen_io_end();
     /* Generate the return instruction */
-    tcg_gen_exit_tb(0);
+    if (dc.is_jmp != DISAS_TB_JUMP) {
+        tcg_gen_exit_tb(0);
+    }
     gen_icount_end(tb, num_insns);
     *gen_opc_ptr = INDEX_op_end;
     if (search_pc) {

@@ -270,17 +270,6 @@ uint32_t HELPER(set_cc_icm)(uint32_t mask, uint32_t val)
     return cc;
 }
 
-/* relative conditional branch */
-void HELPER(brc)(uint32_t cc, uint32_t mask, uint64_t pc, int32_t offset)
-{
-    if ( mask & ( 1 << (3 - cc) ) ) {
-        env->psw.addr = pc + offset;
-    }
-    else {
-        env->psw.addr = pc + 4;
-    }
-}
-
 /* branch relative on 64-bit count (condition is computed inline, this only
    does the branch */
 void HELPER(brctg)(uint64_t flag, uint64_t pc, int32_t offset)
